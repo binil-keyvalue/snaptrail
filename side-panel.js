@@ -108,7 +108,8 @@ class WorkflowRecorder {
     }
 
     handleUserAction(type, event) {
-        if (!this.isRecording) return;
+        console.log('Handling user action:', type, 'on:', window.location.href);
+        if (!this.isRecording || window.location.href.includes('side-panel.html')) return;
         
         // Skip clicks on our own interface
         if (event.target.closest('.container')) return;
@@ -152,11 +153,10 @@ class WorkflowRecorder {
     }
 
     addStep(action, details, icon = '•', screenshot = null) {
-        this.stepCounter++;
         const timestamp = new Date().toLocaleTimeString();
         
         const step = {
-            number: this.stepCounter,
+            number: this.steps.length + 1,
             action,
             details,
             icon,
@@ -178,8 +178,14 @@ class WorkflowRecorder {
                 <img src="${step.screenshot}" alt="Screenshot" style="max-width: 100%; height: auto; border-radius: 4px; margin-top: 8px; cursor: pointer;" onclick="window.open('${step.screenshot}', '_blank')">
             </div>` : '';
         
+        const showDeleteButton = step.action !== 'Start Recording' && step.action !== 'Stop Recording';
+        const deleteButtonHtml = showDeleteButton ? '<button class="step-delete" title="Delete step">🗑️</button>' : '';
+        
         stepElement.innerHTML = `
-            <div class="step-number">${step.number}</div>
+            <div class="step-header">
+                <div class="step-number">${step.number}</div>
+                ${deleteButtonHtml}
+            </div>
             <div class="step-action">
                 <span class="step-icon">${step.icon}</span>
                 ${step.action}
@@ -188,6 +194,12 @@ class WorkflowRecorder {
             ${screenshotHtml}
             <div class="step-timestamp">${step.timestamp}</div>
         `;
+        
+        // Add event listener for delete button (only if it exists)
+        const deleteBtn = stepElement.querySelector('.step-delete');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => this.deleteStep(step.number));
+        }
         
         this.workflowSteps.appendChild(stepElement);
         
@@ -221,6 +233,41 @@ class WorkflowRecorder {
         this.stepCount.textContent = `${this.steps.length} steps`;
         this.duration.textContent = `${totalDuration}s duration`;
         this.workflowSummary.classList.add('visible');
+    }
+
+    deleteStep(stepNumber) {
+        // Find and remove the step
+        const stepIndex = this.steps.findIndex(step => step.number === stepNumber);
+        if (stepIndex !== -1) {
+            this.steps.splice(stepIndex, 1);
+            
+            // Renumber all steps after the deleted one
+            this.steps.forEach((step, index) => {
+                step.number = index + 1;
+            });
+            
+            // Re-render all steps
+            this.renderAllSteps();
+        }
+    }
+
+    renderAllSteps() {
+        // Clear existing steps (except empty state)
+        const stepCards = this.workflowSteps.querySelectorAll('.step-card');
+        stepCards.forEach(card => card.remove());
+        
+        // Re-render all steps
+        this.steps.forEach(step => this.renderStep(step));
+        
+        // Show empty state if no steps
+        if (this.steps.length === 0) {
+            this.workflowSteps.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <p>Click "Start Recording" to begin capturing your workflow</p>
+                </div>
+            `;
+        }
     }
 
     exportWorkflow() {
