@@ -19,6 +19,14 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                 chrome.scripting.executeScript({
                     target: { tabId: tabId },
                     files: ['content-script.js']
+                }).then(() => {
+                    // If recording is in progress, tell the new content script to start recording
+                    if (isRecording) {
+                        setTimeout(() => {
+                            chrome.tabs.sendMessage(tabId, { type: 'START_RECORDING' })
+                                .catch(err => console.log('Failed to start recording on new tab:', err));
+                        }, 100);
+                    }
                 }).catch(err => console.log('Script injection failed:', err));
             });
     }
@@ -36,6 +44,14 @@ chrome.runtime.onStartup.addListener(async () => {
                     chrome.scripting.executeScript({
                         target: { tabId: tab.id },
                         files: ['content-script.js']
+                    }).then(() => {
+                        // If recording is in progress, tell the new content script to start recording
+                        if (isRecording) {
+                            setTimeout(() => {
+                                chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' })
+                                    .catch(err => console.log('Failed to start recording on tab:', err));
+                            }, 100);
+                        }
                     }).catch(err => console.log('Script injection failed:', err));
                 });
         }
@@ -52,6 +68,14 @@ chrome.runtime.onInstalled.addListener(async () => {
                     chrome.scripting.executeScript({
                         target: { tabId: tab.id },
                         files: ['content-script.js']
+                    }).then(() => {
+                        // If recording is in progress, tell the new content script to start recording
+                        if (isRecording) {
+                            setTimeout(() => {
+                                chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' })
+                                    .catch(err => console.log('Failed to start recording on tab:', err));
+                            }, 100);
+                        }
                     }).catch(err => console.log('Script injection failed:', err));
                 });
         }
