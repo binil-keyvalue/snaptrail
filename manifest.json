@@ -17,6 +17,13 @@
     "permissions": [
         "sidePanel",
         "contextMenus",
-        "storage"
+        "storage",
+        "tabs",
+        "activeTab",
+        "scripting",
+        "desktopCapture"
+    ],
+    "host_permissions": [
+        "<all_urls>"
     ]
 }
