@@ -205,15 +205,28 @@
             color: #64748b;
         }
 
-        .export-btn {
-            width: 100%;
+        .export-buttons {
+            display: flex;
+            gap: 8px;
             margin-top: 12px;
+        }
+        
+        .export-btn {
+            flex: 1;
             background: #10b981;
             color: white;
         }
-
+        
         .export-btn:hover {
             background: #059669;
+        }
+        
+        #exportDocBtn {
+            background: #3b82f6;
+        }
+        
+        #exportDocBtn:hover {
+            background: #2563eb;
         }
     </style>
 </head>
@@ -248,9 +261,15 @@
                 <span id="stepCount">0 steps</span>
                 <span id="duration">0s duration</span>
             </div>
-            <button id="exportBtn" class="btn export-btn">Export Documentation</button>
+            <div class="export-buttons">
+                <button id="exportJsonBtn" class="btn export-btn">Export JSON</button>
+                <button id="exportDocBtn" class="btn export-btn">Export Document</button>
+            </div>
         </div>
     </div>
+    <script src="lib/vendor/FileSaver.min.js"></script>
+    <script src="lib/vendor/docx.min.js"></script>
+    <script src="lib/document-export/document-generator.js"></script>
     <script src="side-panel.js"></script>
 </body>
 </html>

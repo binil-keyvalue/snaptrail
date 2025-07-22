@@ -18,14 +18,19 @@ class WorkflowRecorder {
         this.workflowSummary = document.getElementById('workflowSummary');
         this.stepCount = document.getElementById('stepCount');
         this.duration = document.getElementById('duration');
-        this.exportBtn = document.getElementById('exportBtn');
+        this.exportJsonBtn = document.getElementById('exportJsonBtn');
+        this.exportDocBtn = document.getElementById('exportDocBtn');
+        
+        // Initialize document generator
+        this.documentGenerator = new DocumentGenerator();
     }
 
     bindEvents() {
         this.startBtn.addEventListener('click', () => this.startRecording());
         this.stopBtn.addEventListener('click', () => this.stopRecording());
         this.clearBtn.addEventListener('click', () => this.clearWorkflow());
-        this.exportBtn.addEventListener('click', () => this.exportWorkflow());
+        this.exportJsonBtn.addEventListener('click', () => this.exportWorkflowJSON());
+        this.exportDocBtn.addEventListener('click', () => this.exportWorkflowDocument());
 
         // Poll for new actions from content scripts
         this.startActionPolling();
@@ -223,8 +228,12 @@ class WorkflowRecorder {
         this.workflowSummary.classList.add('visible');
     }
 
-    exportWorkflow() {
-        const workflow = {
+    /**
+     * Generate workflow data object
+     * @returns {Object} Workflow data ready for export
+     */
+    generateWorkflowData() {
+        return {
             title: `Workflow recorded on ${new Date().toLocaleDateString()}`,
             steps: this.steps,
             metadata: {
@@ -233,6 +242,13 @@ class WorkflowRecorder {
                 url: window.location.href
             }
         };
+    }
+
+    /**
+     * Export workflow as JSON file
+     */
+    exportWorkflowJSON() {
+        const workflow = this.generateWorkflowData();
 
         // Create downloadable JSON file
         const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' });
@@ -243,9 +259,177 @@ class WorkflowRecorder {
         a.click();
         URL.revokeObjectURL(url);
 
-        // Also log to console for demo
-        console.log('Exported Workflow:', workflow);
-        alert('Workflow exported successfully!');
+        console.log('Exported Workflow JSON:', workflow);
+        this.showExportSuccess('JSON file exported successfully!');
+    }
+
+    /**
+     * Export workflow as Word document
+     */
+    async exportWorkflowDocument() {
+        const workflow = this.generateWorkflowData();
+        
+        try {
+            // Show loading state
+            this.showExportProgress('Generating document...');
+            
+            // Generate filename with timestamp
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const filename = `workflow-${timestamp}`;
+            
+            // Use document generator to create and download document
+            await this.documentGenerator.downloadDocument(workflow, filename);
+            
+            console.log('Exported Workflow Document:', workflow);
+            this.showExportSuccess('Word document (.docx) exported successfully!');
+        } catch (error) {
+            console.error('Error exporting document:', error);
+            this.showExportError('Error exporting document. Please try again.');
+        }
+    }
+
+    /**
+     * Show export progress message
+     * @param {string} message - Progress message to display
+     */
+    showExportProgress(message) {
+        // Remove any existing notifications
+        this.removeNotifications();
+        
+        const progressDiv = document.createElement('div');
+        progressDiv.id = 'export-notification';
+        progressDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #3b82f6;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            animation: slideInRight 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        `;
+        
+        progressDiv.innerHTML = `
+            <div style="width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            ${message}
+        `;
+        
+        this.addNotificationStyles();
+        document.body.appendChild(progressDiv);
+    }
+
+    /**
+     * Show export success message
+     * @param {string} message - Success message to display
+     */
+    showExportSuccess(message) {
+        // Remove any existing notifications
+        this.removeNotifications();
+        
+        const successDiv = document.createElement('div');
+        successDiv.id = 'export-notification';
+        successDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            animation: slideInRight 0.3s ease-out;
+        `;
+        successDiv.textContent = message;
+        
+        this.addNotificationStyles();
+        document.body.appendChild(successDiv);
+        
+        // Remove after 4 seconds
+        setTimeout(() => {
+            this.removeNotifications();
+        }, 4000);
+    }
+
+    /**
+     * Show export error message
+     * @param {string} message - Error message to display
+     */
+    showExportError(message) {
+        // Remove any existing notifications
+        this.removeNotifications();
+        
+        const errorDiv = document.createElement('div');
+        errorDiv.id = 'export-notification';
+        errorDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ef4444;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            animation: slideInRight 0.3s ease-out;
+        `;
+        errorDiv.textContent = message;
+        
+        this.addNotificationStyles();
+        document.body.appendChild(errorDiv);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            this.removeNotifications();
+        }, 5000);
+    }
+
+    /**
+     * Add notification styles
+     */
+    addNotificationStyles() {
+        if (!document.getElementById('export-notification-styles')) {
+            const style = document.createElement('style');
+            style.id = 'export-notification-styles';
+            style.textContent = `
+                @keyframes slideInRight {
+                    from {
+                        opacity: 0;
+                        transform: translateX(100%);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                }
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+
+    /**
+     * Remove all notifications
+     */
+    removeNotifications() {
+        const existing = document.getElementById('export-notification');
+        if (existing && existing.parentNode) {
+            existing.parentNode.removeChild(existing);
+        }
     }
 }
 
