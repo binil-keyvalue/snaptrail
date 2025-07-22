@@ -1,0 +1,2 @@
+# snaptrail
+chrome extension
