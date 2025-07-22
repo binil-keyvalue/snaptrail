@@ -135,5 +135,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'GET_RECORDING_STATUS':
             sendResponse({ isRecording, recordingStartTime });
             break;
+            
+        case 'CAPTURE_SCREENSHOT':
+            // Capture screenshot and store action with image
+            chrome.tabs.captureVisibleTab(sender.tab.windowId, { format: 'png' }, (dataUrl) => {
+                if (chrome.runtime.lastError) {
+                    console.log('Screenshot failed:', chrome.runtime.lastError);
+                    // Store action without screenshot
+                    storeActionWithScreenshot(message.action, null, sender.tab);
+                } else {
+                    console.log('Screenshot captured successfully');
+                    // Store action with screenshot
+                    storeActionWithScreenshot(message.action, dataUrl, sender.tab);
+                }
+            });
+            break;
     }
 });
+
+// Helper function to store actions with screenshots
+function storeActionWithScreenshot(action, screenshotDataUrl, tab) {
+    chrome.storage.local.get(['workflowActions'], (result) => {
+        const actions = result.workflowActions || [];
+        actions.push({
+            ...action,
+            screenshot: screenshotDataUrl,
+            tabId: tab.id,
+            url: tab.url,
+            timestamp: Date.now()
+        });
+        
+        // Keep only the last 50 actions to prevent storage overflow (screenshots are large)
+        if (actions.length > 50) {
+            actions.splice(0, actions.length - 50);
+        }
+        
+        chrome.storage.local.set({ workflowActions: actions }, () => {
+            console.log('Action with screenshot stored:', action.text);
+        });
+    });
+}

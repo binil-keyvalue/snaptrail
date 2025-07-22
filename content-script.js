@@ -45,6 +45,10 @@ function captureUserAction(type, event) {
             }
             
             details = `Element: ${tagName}${id}${className}\nURL: ${window.location.href}`;
+            
+            // Capture screenshot for clicks
+            captureScreenshot(type, actionText, details, icon, element);
+            return; // Exit early since we'll send the message from captureScreenshot
             break;
             
         case 'keydown':
@@ -107,5 +111,36 @@ observer.observe(document, { subtree: true, childList: true });
 window.addEventListener('popstate', () => {
     setTimeout(() => captureUserAction('navigation', { target: document }), 100);
 });
+
+// Function to capture screenshot with click overlay
+function captureScreenshot(type, actionText, details, icon, clickedElement) {
+    // Highlight the clicked element temporarily
+    const originalStyle = clickedElement.style.cssText;
+    clickedElement.style.cssText += '; outline: 3px solid #ff4444; outline-offset: 2px; box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);';
+    
+    // Request screenshot from service worker
+    chrome.runtime.sendMessage({ 
+        type: 'CAPTURE_SCREENSHOT',
+        action: {
+            type: type,
+            text: actionText,
+            details: details,
+            icon: icon,
+            timestamp: new Date().toLocaleTimeString(),
+            url: window.location.href,
+            title: document.title
+        }
+    }).then(() => {
+        console.log('Screenshot request sent for:', actionText);
+        // Restore original element style
+        setTimeout(() => {
+            clickedElement.style.cssText = originalStyle;
+        }, 200);
+    }).catch(err => {
+        console.log('Failed to request screenshot:', err);
+        // Restore original element style
+        clickedElement.style.cssText = originalStyle;
+    });
+}
 
 console.log('Content script loaded on:', window.location.href); 

@@ -99,7 +99,7 @@ class WorkflowRecorder {
                     
                     // Process new actions
                     newActions.forEach(action => {
-                        this.addStep(action.text, action.details, action.icon);
+                        this.addStep(action.text, action.details, action.icon, action.screenshot);
                         this.lastActionTimestamp = Math.max(this.lastActionTimestamp, action.timestamp);
                     });
                 });
@@ -151,7 +151,7 @@ class WorkflowRecorder {
         this.addStep(actionText, details, icon);
     }
 
-    addStep(action, details, icon = '•') {
+    addStep(action, details, icon = '•', screenshot = null) {
         this.stepCounter++;
         const timestamp = new Date().toLocaleTimeString();
         
@@ -160,7 +160,8 @@ class WorkflowRecorder {
             action,
             details,
             icon,
-            timestamp
+            timestamp,
+            screenshot
         };
         
         this.steps.push(step);
@@ -172,6 +173,11 @@ class WorkflowRecorder {
         stepElement.className = 'step-card';
         stepElement.style.animation = 'slideIn 0.3s ease-out';
         
+        const screenshotHtml = step.screenshot ? 
+            `<div class="step-screenshot">
+                <img src="${step.screenshot}" alt="Screenshot" style="max-width: 100%; height: auto; border-radius: 4px; margin-top: 8px; cursor: pointer;" onclick="window.open('${step.screenshot}', '_blank')">
+            </div>` : '';
+        
         stepElement.innerHTML = `
             <div class="step-number">${step.number}</div>
             <div class="step-action">
@@ -179,6 +185,7 @@ class WorkflowRecorder {
                 ${step.action}
             </div>
             <div class="step-details">${step.details}</div>
+            ${screenshotHtml}
             <div class="step-timestamp">${step.timestamp}</div>
         `;
         
