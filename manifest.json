@@ -1,22 +1,29 @@
 {
-    "name": "Snap Trail",
-    "version": "0.1",
-    "manifest_version": 3,
-    "description": "Provides Document Generation in the side panel.",
-    "background": {
-        "service_worker": "service-worker.js"
-    },
-    "icons": {
-        "128": "images/icon-128.png",
-        "16": "images/icon-16.png"
-    },
-    "side_panel": {
-        "default_path": "side-panel.html"
-    },
-    "action": {},
-    "permissions": [
-        "sidePanel",
-        "contextMenus",
-        "storage"
-    ]
+  "manifest_version": 3,
+  "name": "Action Recorder",
+  "version": "1.0",
+  "description": "Capture user actions with screenshots for test documentation",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs",
+    "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "Action Recorder"
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["panel.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
