@@ -1,5 +1,6 @@
 // Content script to capture user actions on web pages
 let isRecording = false;
+let inputTimers = new Map(); // Track input timers for debouncing
 
 // Listen for recording start/stop messages from service worker
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -8,6 +9,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('Recording started on:', window.location.href);
     } else if (message.type === 'STOP_RECORDING') {
         isRecording = false;
+        // Clear any pending input timers
+        inputTimers.forEach(timer => clearTimeout(timer));
+        inputTimers.clear();
         console.log('Recording stopped on:', window.location.href);
     } else if (message.type === 'PING') {
         // Respond to ping to confirm content script is loaded
@@ -52,11 +56,48 @@ function captureUserAction(type, event) {
             break;
             
         case 'keydown':
-            if (event.key === 'Tab' || event.key === 'Shift' || event.key === 'Control') return;
+            // Skip standalone modifier keys
+            if (event.key === 'Tab' || event.key === 'Shift' || event.key === 'Control' || event.key === 'Alt' || event.key === 'Meta') return;
+            
+            // Skip regular typing in input fields - we'll capture it via the debounced input handler
+            const isInputField = event.target.tagName.toLowerCase() === 'input' || 
+                                event.target.tagName.toLowerCase() === 'textarea' || 
+                                event.target.contentEditable === 'true';
+            
+            if (isInputField && event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+                return; // Skip regular character typing
+            }
             
             icon = '⌨️';
-            actionText = `Press "${event.key}"`;
-            details = `Key: ${event.key}\nTarget: ${event.target.tagName.toLowerCase()}\nURL: ${window.location.href}`;
+            
+            // Build key combination string
+            let keyCombo = '';
+            if (event.ctrlKey) keyCombo += 'Ctrl+';
+            if (event.altKey) keyCombo += 'Alt+';
+            if (event.shiftKey && event.key.length > 1) keyCombo += 'Shift+'; // Only show Shift for special keys
+            if (event.metaKey) keyCombo += 'Cmd+';
+            keyCombo += event.key;
+            
+            // Special handling for common shortcuts
+            const shortcutNames = {
+                'Ctrl+c': 'Copy',
+                'Ctrl+v': 'Paste',
+                'Ctrl+x': 'Cut',
+                'Ctrl+z': 'Undo',
+                'Ctrl+y': 'Redo',
+                'Ctrl+s': 'Save',
+                'Ctrl+a': 'Select All',
+                'Ctrl+f': 'Find',
+                'Ctrl+r': 'Refresh',
+                'Ctrl+t': 'New Tab',
+                'Ctrl+w': 'Close Tab',
+                'Ctrl+n': 'New Window'
+            };
+            
+            const shortcutName = shortcutNames[keyCombo.toLowerCase()];
+            actionText = shortcutName ? `${shortcutName} (${keyCombo})` : `Press "${keyCombo}"`;
+            
+            details = `Key combination: ${keyCombo}\nTarget: ${event.target.tagName.toLowerCase()}\nURL: ${window.location.href}`;
             break;
             
         case 'navigation':
@@ -67,8 +108,16 @@ function captureUserAction(type, event) {
             
         case 'form_input':
             icon = '✏️';
-            actionText = `Input text`;
-            details = `Field: ${event.target.name || event.target.id || event.target.tagName}\nURL: ${window.location.href}`;
+            const fieldName = event.target.name || event.target.id || event.target.placeholder || event.target.tagName;
+            const inputValue = event.target.value.trim();
+            
+            if (inputValue) {
+                actionText = `Type "${inputValue.substring(0, 50)}${inputValue.length > 50 ? '...' : ''}"`;
+                details = `Field: ${fieldName}\nValue: ${inputValue}\nURL: ${window.location.href}`;
+            } else {
+                actionText = `Clear field`;
+                details = `Field: ${fieldName}\nURL: ${window.location.href}`;
+            }
             break;
     }
 
@@ -94,7 +143,27 @@ function captureUserAction(type, event) {
 // Event listeners for user actions
 document.addEventListener('click', (e) => captureUserAction('click', e), true);
 document.addEventListener('keydown', (e) => captureUserAction('keydown', e), true);
-document.addEventListener('input', (e) => captureUserAction('form_input', e), true);
+
+// Debounced input handler to capture complete text after user stops typing
+document.addEventListener('input', (e) => {
+    if (!isRecording) return;
+    
+    const element = e.target;
+    const elementKey = element.name || element.id || element.tagName + Math.random();
+    
+    // Clear existing timer for this element
+    if (inputTimers.has(elementKey)) {
+        clearTimeout(inputTimers.get(elementKey));
+    }
+    
+    // Set new timer to capture input after 1 second of no typing
+    const timer = setTimeout(() => {
+        captureUserAction('form_input', e);
+        inputTimers.delete(elementKey);
+    }, 1000);
+    
+    inputTimers.set(elementKey, timer);
+}, true);
 
 // Capture navigation events
 let currentUrl = window.location.href;
