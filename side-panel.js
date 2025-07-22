@@ -506,18 +506,31 @@ class WorkflowRecorder {
     async sendToOpenAI(workflow, apiKey) {
         const messages = [{
             role: 'system',
-            content: 'You are a technical documentation expert. Create comprehensive documentation from this workflow. '
+            content: 'You are a technical documentation expert. I will provide workflow data as JSON with screenshots. Return a JSON object with "captions" array containing a descriptive caption for each step. Each caption should be 1-2 sentences explaining what the user accomplished in that step.'
         }];
 
-        const workflowText = `Workflow: ${workflow.title}
-Duration: ${workflow.metadata.duration}s
-Steps: ${workflow.steps.length}
+        // Prepare workflow JSON
+        const workflowJSON = {
+            title: workflow.title,
+            duration: workflow.metadata.duration,
+            totalSteps: workflow.steps.length,
+            steps: workflow.steps.map((step, index) => ({
+                stepNumber: index + 1,
+                action: step.action,
+                details: step.details,
+                timestamp: step.timestamp,
+                hasScreenshot: !!step.screenshot
+            }))
+        };
 
-${workflow.steps.map((step, i) => `${i + 1}. ${step.action}\n   ${step.details}`).join('\n\n')}`;
-
-        const content = [{ type: 'text', text: workflowText }];
-
-        // Add screenshots
+        const content = [
+            { 
+                type: 'text', 
+                text: `Analyze this workflow and provide captions for each step:\n\n${JSON.stringify(workflowJSON, null, 2)}\n\nReturn JSON format: {"captions": ["caption for step 1", "caption for step 2", ...]}`
+            }
+        ];
+        
+        // Add screenshots in order
         workflow.steps.forEach(step => {
             if (step.screenshot) {
                 content.push({
@@ -538,7 +551,8 @@ ${workflow.steps.map((step, i) => `${i + 1}. ${step.action}\n   ${step.details}`
             body: JSON.stringify({
                 model: 'gpt-4o-mini',
                 messages,
-                max_tokens: 3000
+                max_tokens: 3000,
+                response_format: { type: "json_object" }
             })
         });
 
@@ -548,16 +562,28 @@ ${workflow.steps.map((step, i) => `${i + 1}. ${step.action}\n   ${step.details}`
         }
 
         const result = await response.json();
-        return result.choices[0].message.content;
+        return JSON.parse(result.choices[0].message.content);
     }
 
     downloadAIResponse(response) {
         const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
-        const blob = new Blob([response], { type: 'text/plain' });
+        
+        // Format the response as readable text with captions
+        let formattedText = `AI-Generated Step Captions\nGenerated: ${new Date().toLocaleString()}\n\n`;
+        
+        if (response.captions && Array.isArray(response.captions)) {
+            response.captions.forEach((caption, index) => {
+                formattedText += `Step ${index + 1}: ${caption}\n\n`;
+            });
+        } else {
+            formattedText += JSON.stringify(response, null, 2);
+        }
+        
+        const blob = new Blob([formattedText], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `ai-workflow-analysis-${timestamp}.txt`;
+        a.download = `ai-step-captions-${timestamp}.txt`;
         a.click();
         URL.revokeObjectURL(url);
     }
