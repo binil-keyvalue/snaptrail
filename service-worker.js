@@ -1,6 +1,7 @@
 // Global state to track recording status
 let isRecording = false;
 let recordingStartTime = null;
+let lastActiveTabId = null;
 
 // Handle extension icon click to open side panel
 chrome.action.onClicked.addListener(async (tab) => {
@@ -57,12 +58,31 @@ chrome.runtime.onInstalled.addListener(async () => {
     }
 });
 
+// Track tab switches
+chrome.tabs.onActivated.addListener((activeInfo) => {
+    if (isRecording && lastActiveTabId && lastActiveTabId !== activeInfo.tabId) {
+        chrome.tabs.get(activeInfo.tabId, (tab) => {
+            if (tab.url && tab.url.startsWith('http')) {
+                // Store tab switch action
+                storeTabSwitchAction(tab, lastActiveTabId);
+            }
+        });
+    }
+    lastActiveTabId = activeInfo.tabId;
+});
+
 // Handle messages from side panel and content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.type) {
         case 'START_RECORDING':
             isRecording = true;
             recordingStartTime = Date.now();
+            // Initialize tab tracking
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    lastActiveTabId = tabs[0].id;
+                }
+            });
             // Broadcast to all content scripts
             chrome.tabs.query({}, (tabs) => {
                 tabs.forEach(tab => {
@@ -93,6 +113,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             
         case 'STOP_RECORDING':
             isRecording = false;
+            lastActiveTabId = null; // Reset tab tracking
             // Broadcast to all content scripts
             chrome.tabs.query({}, (tabs) => {
                 tabs.forEach(tab => {
@@ -172,6 +193,41 @@ function storeActionWithScreenshot(action, screenshotDataUrl, tab) {
         
         chrome.storage.local.set({ workflowActions: actions }, () => {
             console.log('Action with screenshot stored:', action.text);
+        });
+    });
+}
+
+// Helper function to store tab switch actions
+function storeTabSwitchAction(newTab, previousTabId) {
+    chrome.tabs.get(previousTabId, (previousTab) => {
+        const action = {
+            type: 'tab_switch',
+            text: `Switch to "${newTab.title}"`,
+            details: `From: ${previousTab?.title || 'Unknown tab'}\nTo: ${newTab.title}\nURL: ${newTab.url}`,
+            icon: '🔄',
+            timestamp: new Date().toLocaleTimeString(),
+            url: newTab.url,
+            title: newTab.title
+        };
+        
+        chrome.storage.local.get(['workflowActions'], (result) => {
+            const actions = result.workflowActions || [];
+            actions.push({
+                ...action,
+                screenshot: null, // No screenshot for tab switches
+                tabId: newTab.id,
+                url: newTab.url,
+                timestamp: Date.now()
+            });
+            
+            // Keep only the last 50 actions to prevent storage overflow
+            if (actions.length > 50) {
+                actions.splice(0, actions.length - 50);
+            }
+            
+            chrome.storage.local.set({ workflowActions: actions }, () => {
+                console.log('Tab switch action stored:', action.text);
+            });
         });
     });
 }
